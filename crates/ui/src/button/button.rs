@@ -187,6 +187,7 @@ pub struct Button {
     style: StyleRefinement,
     icon: Option<ButtonIcon>,
     label: Option<SharedString>,
+    truncate_label: bool,
     children: Vec<AnyElement>,
     disabled: bool,
     pub(crate) selected: bool,
@@ -230,6 +231,7 @@ impl Button {
             style: StyleRefinement::default(),
             icon: None,
             label: None,
+            truncate_label: false,
             disabled: false,
             selected: false,
             variant: ButtonVariant::default(),
@@ -284,6 +286,15 @@ impl Button {
     /// Set label to the Button, if no label is set, the button will be in Icon Button mode.
     pub fn label(mut self, label: impl Into<SharedString>) -> Self {
         self.label = Some(label.into());
+        self
+    }
+
+    /// Truncate the label when the button is constrained by its parent.
+    ///
+    /// Icons and dropdown carets remain visible while the label shrinks and
+    /// displays an ellipsis.
+    pub fn truncate_label(mut self) -> Self {
+        self.truncate_label = true;
         self
     }
 
@@ -440,6 +451,7 @@ impl RenderOnce for Button {
         let clickable = self.clickable();
         let is_disabled = self.disabled;
         let hoverable = self.hoverable();
+        let truncate_label = self.truncate_label;
         let normal_style = style.normal(self.outline, cx);
         let icon_size = match self.size {
             Size::Size(v) => Size::Size(v * 0.75),
@@ -480,6 +492,7 @@ impl RenderOnce for Button {
             .cursor_default()
             .flex()
             .flex_shrink_0()
+            .when(truncate_label, |this| this.flex_shrink_1().min_w_0())
             .items_center()
             .justify_center()
             .cursor_default()
@@ -597,6 +610,7 @@ impl RenderOnce for Button {
                 h_flex()
                     .id("label")
                     .size_full()
+                    .when(truncate_label, |this| this.min_w_0().overflow_hidden())
                     .items_center()
                     .justify_center()
                     .button_text_size(self.size)
@@ -613,17 +627,26 @@ impl RenderOnce for Button {
                         )
                     })
                     .when_some(self.label, |this, label| {
-                        this.child(div().flex_none().line_height(relative(1.)).child(label))
+                        this.child(
+                            div()
+                                .line_height(relative(1.))
+                                .when(truncate_label, |this| {
+                                    this.flex_1().min_w_0().truncate()
+                                })
+                                .when(!truncate_label, |this| this.flex_none())
+                                .child(label),
+                        )
                     })
                     .children(self.children)
                     .when(self.dropdown_caret, |this| {
                         this.justify_between().child(
-                            Icon::new(IconName::ChevronDown).xsmall().text_color(
-                                match self.disabled {
+                            Icon::new(IconName::ChevronDown)
+                                .xsmall()
+                                .flex_none()
+                                .text_color(match self.disabled {
                                     true => normal_style.fg.opacity(0.3),
                                     false => normal_style.fg.opacity(0.5),
-                                },
-                            ),
+                                }),
                         )
                     })
             })
@@ -1153,6 +1176,7 @@ mod tests {
     fn test_button_builder(_cx: &mut gpui::TestAppContext) {
         let button = Button::new("complex-button")
             .label("Save Changes")
+            .truncate_label()
             .primary()
             .outline()
             .large()
@@ -1168,6 +1192,7 @@ mod tests {
             .on_click(|_, _, _| {});
 
         assert_eq!(button.label, Some("Save Changes".into()));
+        assert!(button.truncate_label);
         assert_eq!(button.variant, ButtonVariant::Primary);
         assert!(button.outline);
         assert_eq!(button.size, Size::Large);

@@ -12,6 +12,7 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 use gpui::{Half, TextAlign};
+use lsp_types::CompletionItem;
 use ropey::{Rope, RopeSlice};
 use serde::Deserialize;
 use std::borrow::Cow;
@@ -122,7 +123,19 @@ actions!(
 #[derive(Clone)]
 pub enum InputEvent {
     Change,
-    PressEnter { secondary: bool, shift: bool },
+    /// A completion menu item was accepted and inserted into the input.
+    ///
+    /// Both ranges use UTF-8 byte offsets. `replaced_range` refers to the
+    /// pre-edit text and `inserted_range` refers to the resulting text.
+    CompletionAccepted {
+        item: CompletionItem,
+        replaced_range: Range<usize>,
+        inserted_range: Range<usize>,
+    },
+    PressEnter {
+        secondary: bool,
+        shift: bool,
+    },
     Focus,
     Blur,
 }
@@ -136,7 +149,10 @@ pub(crate) fn init(cx: &mut App) {
         #[cfg(target_os = "macos")]
         KeyBinding::new("ctrl-backspace", Backspace, Some(CONTEXT)),
         KeyBinding::new("delete", Delete, Some(CONTEXT)),
+        #[cfg(target_os = "macos")]
         KeyBinding::new("shift-delete", Delete, Some(CONTEXT)),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-delete", Cut, Some(CONTEXT)),
         #[cfg(target_os = "macos")]
         KeyBinding::new("cmd-backspace", DeleteToBeginningOfLine, Some(CONTEXT)),
         #[cfg(target_os = "macos")]
@@ -256,10 +272,22 @@ pub(crate) fn init(cx: &mut App) {
         KeyBinding::new("ctrl-left", MoveToPreviousWord, Some(CONTEXT)),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-right", MoveToNextWord, Some(CONTEXT)),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-home", MoveToStart, Some(CONTEXT)),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-end", MoveToEnd, Some(CONTEXT)),
         #[cfg(target_os = "macos")]
         KeyBinding::new("cmd-shift-up", SelectToStart, Some(CONTEXT)),
         #[cfg(target_os = "macos")]
         KeyBinding::new("cmd-shift-down", SelectToEnd, Some(CONTEXT)),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-shift-home", SelectToStart, Some(CONTEXT)),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-shift-end", SelectToEnd, Some(CONTEXT)),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-insert", Copy, Some(CONTEXT)),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("shift-insert", Paste, Some(CONTEXT)),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-z", Undo, Some(CONTEXT)),
         #[cfg(not(target_os = "macos"))]
